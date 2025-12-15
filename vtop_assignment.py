@@ -10,9 +10,9 @@ from datetime import datetime
 from datetime import datetime
 from ics import Calendar, Event
 
-#Saving your VTOP credentials here
-VTOP_USERNAME = "NISHANTSHARMA"  # replace with your VTOP username
-VTOP_PASSWORD = "IDKmyPassword_1234"  # replace with your VTOP password
+#Saving VTOP credentials 
+VTOP_USERNAME = "name" 
+VTOP_PASSWORD = "password"
 
 #STEP 1: Open VTOP Login Page
 driver = webdriver.Chrome()  # make sure chromedriver.exe is in the same folder
@@ -36,7 +36,8 @@ driver.find_element(By.ID, "username").send_keys(VTOP_USERNAME)
 driver.find_element(By.ID, "password").send_keys(VTOP_PASSWORD)
 print("Filled in credentials...")
 
-#Step 4: Handling CAPTCHA manually
+#Step 4: Handling CAPTCHA
+# Prompt user to enter CAPTCHA manually here, and then fill it on vtop page and submit
 CAPTCHA = input("Please enter the CAPTCHA as shown on the page: ")
 if CAPTCHA.strip() == "":
     driver.find_element(By.XPATH, "//button[contains(text(), 'Submit')]").click()
@@ -68,10 +69,9 @@ select = Select(driver.find_element(By.ID, "semesterSubId"))
 select.select_by_index(1)   #Change index for different semester, index = semester
 print("Selected Semester...")
 
+#Step 7: Opening each course one by one and scraping assignments (with retries in case of stale elements or timeouts)
 
-#Step 7: Opening each course one by one and scraping assignments
-# (with retries in case of stale elements or timeouts)
-NUM_COURSES = 6   # number of courses you have this semester
+NUM_COURSES = 6   # number of courses i have
 MAX_RETRIES_PER_COURSE = 3
 
 for logical_i in range(1, NUM_COURSES + 1):  # logical_i = 1..6 corresponds to rows 2..7
@@ -81,27 +81,27 @@ for logical_i in range(1, NUM_COURSES + 1):  # logical_i = 1..6 corresponds to r
     while attempt < MAX_RETRIES_PER_COURSE and not success:
         attempt += 1
         try:
-            #Step A: Wait for fresh table body to be present
+            #Step A: Wait for new table to load
             table_body = WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "table.customTable > tbody"))
             )
-            # ensure it has at least logical_i+1 rows (because header/skipped row)
+            # making sure that the table has atleast enough rows (as first row is header)
             WebDriverWait(driver, 60).until(
                 lambda d: len(table_body.find_elements(By.TAG_NAME, "tr")) > logical_i
             )
 
-            # STEP B: Opening the (logical_i)th course
-            # (logical_i=1 means 2nd row in table, because 1st row is header)
+            # STEP B: Opening the ith course
+            # (ith=1 means 2nd row in table, because 1st row is header)
             # XPath chooses row index across the tbody rows directly, avoiding stale row objects
             button_xpath = f"(//table[contains(@class,'customTable')]//tbody//tr)[{logical_i+1}]//button"
-            print(f"Opening course {logical_i} (attempt {attempt})")
+            print(f"Opening course {logical_i} (attempt no. {attempt})")
 
             # Wait until that specific button is visible and clickable
             target_button = WebDriverWait(driver, 60).until(
                 EC.element_to_be_clickable((By.XPATH, button_xpath))
             )
 
-            # Click via JS (more reliable on shitty sites)
+            # Click via JS cause this site is just so shitty ki html elements keep going stale
             driver.execute_script("arguments[0].click();", target_button)
             print(f"Clicked button for course {logical_i}")
 
@@ -118,8 +118,8 @@ for logical_i in range(1, NUM_COURSES + 1):  # logical_i = 1..6 corresponds to r
 
             rows = assign_table.find_elements(By.TAG_NAME, "tr")
 
-            #Step D: Process the assignment rows to find the soonest deadline
-            # Find the soonest upcoming assignment deadline by tallying it from today's date
+            #Step D: Process the assignment rows to find the next deadline
+            # Find the next upcoming assignment deadline by looking from today's date
             today = datetime.now()
             deadlines = []
 
@@ -129,7 +129,7 @@ for logical_i in range(1, NUM_COURSES + 1):  # logical_i = 1..6 corresponds to r
                     continue
                 
                 try:
-                    # adjust the column index based on where the date is (guessing 3rd col)
+                    # adjust the column index based on where the date is
                     deadline_text = cells[5].text.strip()
                     deadline = datetime.strptime(deadline_text, "%d-%b-%Y")
                 except Exception as e:
@@ -167,7 +167,7 @@ for logical_i in range(1, NUM_COURSES + 1):  # logical_i = 1..6 corresponds to r
             print(f"Returned to course list after course {logical_i}")
 
             success = True  # we completed this course
-            time.sleep(1)   # extra breathing room before next iteration
+            time.sleep(1)   # extra breathing room before next iteration just so that i can see what is happening
 
         except (TimeoutException, StaleElementReferenceException) as e:
             print(f"Warning: attempt {attempt} for course {logical_i} failed: {type(e).__name__}: {e}")
